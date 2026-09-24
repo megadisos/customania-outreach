@@ -15,6 +15,8 @@ export const panelMiddleware = defineMiddleware(async (ctx, next) => {
   res.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
   res.headers.set('Cache-Control', 'no-store');
   res.headers.set('X-Frame-Options', 'DENY');
-  res.headers.set('Referrer-Policy', 'no-referrer');
+  // same-origin (no no-referrer): con no-referrer el navegador envía "Origin: null" en los POST
+  // y el checkOrigin de Astro rechaza los formularios. same-origin sigue sin filtrar nada a sitios externos.
+  res.headers.set('Referrer-Policy', 'same-origin');
   return res;
 });
