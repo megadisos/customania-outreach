@@ -1,0 +1,57 @@
+---
+export const prerender = false;
+import PanelLayout from '../layouts/PanelLayout.astro';
+import { db } from '../lib/panel/db';
+import { accounts, delayMax, delayMin, followupDays } from '../lib/panel/config';
+import { effectiveLimit, eligible, sentToday, startJob } from '../lib/panel/mailer';
+import { flash } from '../lib/panel/auth';
+
+const d = db();
+const accts = accounts();
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const tpl: any = d.prepare('SELECT * FROM templates WHERE id=?').get(Number(f.get('template_id')));
+  const acct = accts[String(f.get('account'))];
+  const dry = f.get('dry') === '1';
+  if (!tpl || !acct) flash(Astro.cookies, 'Plantilla o cuenta inválida.');
+  else if (!dry && !acct.configured) flash(Astro.cookies, 'Esa cuenta no está configurada en .env. Usa la simulación o configúrala.');
+  else {
+    const room = dry ? 999 : Math.max(0, effectiveLimit(acct) - sentToday(acct.key));
+    const n = Math.min(Number(f.get('n') || 10), room, eligible(tpl.step, tpl.segment).length);
+    if (n <= 0) flash(Astro.cookies, 'Nada por enviar: no hay contactos elegibles o se alcanzó el límite diario de la cuenta.');
+    else { try { startJob(acct, tpl, dry, n); } catch (e: any) { flash(Astro.cookies, e.message); } }
+  }
+  return Astro.redirect('/enviar');
+}
+const tpls = d.prepare('SELECT * FROM templates ORDER BY step, id').all() as any[];
+const counts = Object.fromEntries(tpls.map((t) => [t.id, eligible(t.step, t.segment).length]));
+---
+<PanelLayout title="Enviar">
+  <h1>Enviar</h1>
+  <div class="card">
+    <form method="post">
+      <div class="row">
+        <label>Plantilla<br />
+          <select name="template_id">{tpls.map((t) => <option value={t.id}>{t.name}{t.attach_catalog ? ' 📎' : ''} — {counts[t.id]} elegibles</option>)}</select></label>
+        <label>Cuenta<br />
+          <select name="account">{Object.values(accts).map((a) => <option value={a.key}>{a.label}{a.configured ? '' : ' (sin configurar)'}</option>)}</select></label>
+        <label>Cantidad<br /><input type="number" name="n" value="10" min="1" max="100" style="width:90px" /></label>
+      </div>
+      <p><label><input type="checkbox" name="dry" value="1" checked /> Simulación (no envía; guarda el resultado en el historial como dry_run)</label></p>
+      <button>Iniciar</button>
+      <p class="mu">📎 = la plantilla adjunta el catálogo PDF (se genera desde la tienda al iniciar y se reutiliza durante el día). Elegibles = paso 1: contactos «new» del segmento de la plantilla; paso 2: contactados hace {followupDays()}+ días sin respuesta ni baja y sin seguimiento previo. Nunca se escribe a bajas ni rebotes. Pausa aleatoria de {delayMin()}–{delayMax()} s entre correos; el tope diario sube gradualmente (calentamiento).</p>
+    </form>
+  </div>
+  <div class="card"><h2>Progreso</h2><div id="st" class="mu">Sin envío en curso.</div><pre id="lg" style="min-height:60px"></pre></div>
+</PanelLayout>
+<script is:inline>
+  async function poll() {
+    try {
+      const r = await (await fetch('/enviar/estado.json')).json();
+      document.getElementById('st').textContent = (r.running ? 'En curso… ' : 'Inactivo. ') + r.done + ' / ' + r.total;
+      document.getElementById('lg').textContent = r.log.join('\n');
+      setTimeout(poll, r.running ? 2000 : 6000);
+    } catch { setTimeout(poll, 8000); }
+  }
+  poll();
+</script>

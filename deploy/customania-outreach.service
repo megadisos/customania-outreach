@@ -1,0 +1,20 @@
+[Unit]
+Description=Customania Outreach (outreach.customania.com.co)
+After=network.target
+
+[Service]
+WorkingDirectory=/var/www/customania-outreach
+EnvironmentFile=/var/www/customania-outreach/.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node dist/server/entry.mjs
+Restart=always
+RestartSec=3
+User=www-data
+# Endurecimiento opcional pero recomendado (esta app solo necesita su propia carpeta):
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/www/customania-outreach/data
+
+[Install]
+WantedBy=multi-user.target

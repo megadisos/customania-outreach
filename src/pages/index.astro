@@ -1,0 +1,62 @@
+---
+export const prerender = false;
+import PanelLayout from '../layouts/PanelLayout.astro';
+import { db } from '../lib/panel/db';
+import { accounts } from '../lib/panel/config';
+import { effectiveLimit, sentToday } from '../lib/panel/mailer';
+import { checkInbox } from '../lib/panel/inbox';
+import { flash } from '../lib/panel/auth';
+
+if (Astro.request.method === 'POST') {
+  const msgs: string[] = [];
+  for (const a of Object.values(accounts())) {
+    try {
+      const s = await checkInbox(a);
+      msgs.push(`${a.key}: ` + (s ? `${s.scanned} revisados, ${s.replied} respuestas, ${s.bounced} rebotes, ${s.unsub} bajas` : 'sin IMAP configurado'));
+    } catch (e: any) { msgs.push(`${a.key}: error ${e?.message || e}`); }
+  }
+  flash(Astro.cookies, msgs.join(' · '));
+  return Astro.redirect('/');
+}
+
+const d = db();
+const counts: Record<string, number> = {};
+for (const r of d.prepare('SELECT status, COUNT(*) n FROM contacts GROUP BY status').all() as any[]) counts[r.status] = r.n;
+const total = Object.values(counts).reduce((a, b) => a + b, 0);
+const accts = Object.values(accounts()).map((a) => ({ ...a, today: sentToday(a.key), eff: effectiveLimit(a) }));
+const recent = d.prepare('SELECT * FROM send_log ORDER BY id DESC LIMIT 8').all() as any[];
+const totalSent = (d.prepare("SELECT COUNT(*) n FROM send_log WHERE status='sent'").get() as any).n;
+---
+<PanelLayout title="Resumen">
+  <h1>Resumen</h1>
+  <div class="grid">
+    <div class="card"><div class="stat">{total}</div><div class="mu">contactos</div></div>
+    <div class="card"><div class="stat">{counts.new || 0}</div><div class="mu">nuevos (sin contactar)</div></div>
+    <div class="card"><div class="stat">{totalSent}</div><div class="mu">correos enviados</div></div>
+    <div class="card"><div class="stat">{counts.replied || 0}</div><div class="mu">respondieron</div></div>
+    <div class="card"><div class="stat">{(counts.unsubscribed || 0) + (counts.do_not_contact || 0)}</div><div class="mu">bajas / no contactar</div></div>
+    <div class="card"><div class="stat">{counts.bounced || 0}</div><div class="mu">rebotes</div></div>
+  </div>
+  <div class="card">
+    <h2>Cuentas de envío</h2>
+    <div class="tw"><table>
+      <tr><th>Cuenta</th><th>Estado</th><th>Hoy</th><th>Límite hoy (calentamiento)</th></tr>
+      {accts.map((a) => (
+        <tr><td>{a.label}<div class="mu">{a.fromEmail || '—'}</div></td>
+          <td>{a.configured ? <span class="tag sent">configurada</span> : <span class="tag failed">falta configurar en .env</span>}</td>
+          <td>{a.today}</td><td>{a.eff} de {a.limit}</td></tr>
+      ))}
+    </table></div>
+    <form method="post" style="margin-top:10px"><button class="sec">Revisar bandeja (respuestas, rebotes, bajas)</button></form>
+  </div>
+  <div class="card">
+    <h2>Últimos envíos</h2>
+    <div class="tw"><table>
+      <tr><th>Fecha</th><th>Para</th><th>Plantilla</th><th>Cuenta</th><th>Estado</th></tr>
+      {recent.length === 0 && <tr><td colspan="5" class="mu">Aún no hay envíos.</td></tr>}
+      {recent.map((r) => (
+        <tr><td>{r.sent_at}</td><td><a href={`/historial/${r.id}`}>{r.to_email}</a></td><td>{r.template_name}</td><td>{r.account}</td><td><span class={`tag ${r.status}`}>{r.status}</span></td></tr>
+      ))}
+    </table></div>
+  </div>
+</PanelLayout>

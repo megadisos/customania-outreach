@@ -1,0 +1,22 @@
+---
+export const prerender = false;
+import PanelLayout from '../layouts/PanelLayout.astro';
+---
+<PanelLayout title="Buenas prácticas">
+  <h1>Buenas prácticas incorporadas</h1>
+  <div class="card"><h2>Lo que el panel ya hace</h2><ul>
+    <li><b>Límites y calentamiento:</b> empieza con 15 correos/día por cuenta y sube 5 por día hasta el tope (por defecto 40). Un dominio que envía mucho de golpe termina en spam.</li>
+    <li><b>Pausas aleatorias</b> entre correos y una sola conexión SMTP por lote.</li>
+    <li><b>Cero repeticiones:</b> un contacto recibe el paso 1 una sola vez y, si no responde, un único seguimiento pasados unos días. Nunca más.</li>
+    <li><b>Baja fácil:</b> pie con identificación, dirección y aviso de tratamiento de datos (Ley 1581 de 2012), enlace de baja de un clic (customania.com.co/baja/…), cabecera List-Unsubscribe y respuesta «BAJA». La bandeja se revisa por IMAP y las bajas, rebotes y respuestas cambian el estado solas.</li>
+    <li><b>Lista de supresión permanente:</b> quien se da de baja o rebota no vuelve a ser elegible, aunque se reimporte.</li>
+    <li><b>Texto simple con versión HTML mínima</b>, un solo enlace y una sola petición (cotizar). El único adjunto es el catálogo PDF liviano.</li>
+    <li><b>Simulación activada por defecto</b> para revisar antes de enviar de verdad.</li>
+    <li><b>Todo registrado:</b> cada correo guarda cuenta, plantilla, asunto, cuerpo exacto, adjunto, fecha, resultado y Message-ID.</li></ul></div>
+  <div class="card"><h2>Lo que debes hacer tú antes del primer envío real</h2><ol>
+    <li>Si usas el correo de customania.com.co: verifica que el dominio tenga <b>SPF, DKIM y DMARC</b> (mail-tester.com o MXToolbox). Sin eso, muchos correos irán a spam.</li>
+    <li>Envíate primero una prueba a tu Gmail personal y revisa que llegue a la bandeja principal.</li>
+    <li>Escribe de preferencia a direcciones de contacto o compras y agrega nombres reales cuando los conozcas.</li>
+    <li>Responde rápido a quien conteste.</li>
+    <li>Mantén la lista propia y orgánica: no compres bases de datos y anota siempre la fuente de cada correo.</li></ol></div>
+</PanelLayout>

@@ -1,0 +1,40 @@
+---
+export const prerender = false;
+import fs from 'node:fs';
+import path from 'node:path';
+import PanelLayout from '../layouts/PanelLayout.astro';
+import { CATALOG_DIR, MAX_PRODUCTS, PROFILES, STORE, getCatalog } from '../lib/panel/catalog';
+import { flash } from '../lib/panel/auth';
+
+if (Astro.request.method === 'POST') {
+  const profile = String((await Astro.request.formData()).get('profile') || '');
+  try {
+    const r = await getCatalog(profile, true);
+    flash(Astro.cookies, `Catálogo generado: ${path.basename(r.path)} (${r.count} productos, ${(fs.statSync(r.path).size / 1048576).toFixed(1)} MB).`);
+  } catch (e: any) { flash(Astro.cookies, 'No se pudo generar el catálogo: ' + (e?.message || e)); }
+  return Astro.redirect('/catalogos');
+}
+const files = fs.existsSync(CATALOG_DIR)
+  ? fs.readdirSync(CATALOG_DIR).filter((f) => f.endsWith('.pdf')).sort().reverse().map((f) => {
+      const s = fs.statSync(path.join(CATALOG_DIR, f));
+      return { name: f, mb: s.size / 1048576, at: s.mtime.toLocaleString('sv-SE', { timeZone: 'America/Bogota' }) };
+    })
+  : [];
+---
+<PanelLayout title="Catálogos">
+  <h1>Catálogos PDF</h1>
+  <p class="mu">Se generan con los productos publicados en <b>{STORE()}</b> (fotos y precios actuales), sin mercancía de fans/licencias, máximo {MAX_PRODUCTS()} productos por catálogo. Se regeneran solos al enviar una plantilla con 📎 (uno por día); aquí puedes forzarlos y revisarlos antes.</p>
+  <div class="grid">
+    {Object.entries(PROFILES).map(([k, v]) => (
+      <div class="card"><h2>{v.label}</h2>
+        <form method="post"><input type="hidden" name="profile" value={k} /><button>Generar / actualizar ahora</button></form></div>
+    ))}
+  </div>
+  <div class="card tw"><h2>Archivos generados</h2>
+    <table><tr><th>Archivo</th><th>Tamaño</th><th>Fecha</th></tr>
+      {files.length === 0 && <tr><td colspan="3" class="mu">Aún no has generado ninguno.</td></tr>}
+      {files.map((f) => <tr><td><a href={`/catalogos/archivo/${f.name}`} target="_blank">{f.name}</a></td><td>{f.mb.toFixed(1)} MB</td><td>{f.at}</td></tr>)}
+    </table>
+    <p class="mu">Consejo: un adjunto de menos de ~2 MB llega mejor a la bandeja de entrada. Si pesa más, baja CATALOG_MAX_PRODUCTS en .env.</p>
+  </div>
+</PanelLayout>

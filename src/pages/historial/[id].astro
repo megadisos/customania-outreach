@@ -1,0 +1,17 @@
+---
+export const prerender = false;
+import PanelLayout from '../../layouts/PanelLayout.astro';
+import { db } from '../../lib/panel/db';
+const r: any = db().prepare('SELECT * FROM send_log WHERE id=?').get(Number(Astro.params.id));
+if (!r) return new Response('No encontrado', { status: 404 });
+---
+<PanelLayout title={`Correo a ${r.to_email}`}>
+  <h1>Correo a {r.to_email}</h1>
+  <div class="card">
+    <div class="mu">{r.sent_at} · desde {r.from_email} ({r.account}) · plantilla «{r.template_name}» · paso {r.step} · <span class={`tag ${r.status}`}>{r.status}</span></div>
+    {r.error && <p style="color:var(--er)">{r.error}</p>}
+    {r.attachment && <p>📎 Adjunto: {r.attachment}</p>}
+    <h2>{r.subject}</h2><pre>{r.body}</pre>
+    <div class="mu">Message-ID: {r.message_id}</div>
+  </div>
+</PanelLayout>

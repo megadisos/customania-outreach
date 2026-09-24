@@ -1,0 +1,24 @@
+---
+export const prerender = false;
+import PanelLayout from '../../layouts/PanelLayout.astro';
+import { db } from '../../lib/panel/db';
+const st = Astro.url.searchParams.get('status') || '';
+const rows = (st ? db().prepare('SELECT * FROM send_log WHERE status=? ORDER BY id DESC LIMIT 500').all(st)
+                 : db().prepare('SELECT * FROM send_log ORDER BY id DESC LIMIT 500').all()) as any[];
+---
+<PanelLayout title="Historial">
+  <h1>Historial de envíos</h1>
+  <div class="row">
+    <form class="row" method="get"><select name="status" onchange="this.form.submit()"><option value="">Todos</option>{['sent', 'failed', 'dry_run'].map((s) => <option selected={s === st}>{s}</option>)}</select></form>
+    <a href="/historial/exportar.csv"><button class="sec" type="button">Exportar a CSV (Excel)</button></a>
+  </div>
+  <div class="card tw"><table>
+    <tr><th>Fecha</th><th>Para</th><th>Desde</th><th>Plantilla</th><th>Paso</th><th>Asunto</th><th>Estado</th></tr>
+    {rows.length === 0 && <tr><td colspan="7" class="mu">Sin registros.</td></tr>}
+    {rows.map((r) => (
+      <tr><td>{r.sent_at}</td><td><a href={`/historial/${r.id}`}>{r.to_email}</a></td><td>{r.from_email}</td><td>{r.template_name}</td><td>{r.step}</td>
+        <td>{r.subject}{r.attachment ? ' 📎' : ''}</td>
+        <td><span class={`tag ${r.status}`}>{r.status}</span>{r.error && <div class="mu">{String(r.error).slice(0, 80)}</div>}</td></tr>
+    ))}
+  </table></div>
+</PanelLayout>

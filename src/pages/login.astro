@@ -1,0 +1,43 @@
+---
+export const prerender = false;
+import { checkPassword, clearFailures, isAuthed, panelConfigured, registerFailure, safePath, startSession, tooManyAttempts } from '../lib/panel/auth';
+
+const ip = (Astro.request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || Astro.clientAddress || 'local';
+const safeNext = safePath(Astro.url.searchParams.get('next'));
+let error = '';
+
+if (isAuthed(Astro.cookies)) return Astro.redirect(safeNext);
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  if (!panelConfigured()) error = 'El panel no está configurado: define PANEL_PASSWORD (mínimo 8 caracteres) en el .env del servidor.';
+  else if (tooManyAttempts(ip)) error = 'Demasiados intentos. Espera 15 minutos.';
+  else if (checkPassword(String(form.get('password') || ''))) {
+    clearFailures(ip);
+    startSession(Astro.cookies);
+    return Astro.redirect(safeNext);
+  } else {
+    registerFailure(ip);
+    error = 'Contraseña incorrecta.';
+  }
+}
+---
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Acceso · Customania</title>
+<style>
+  body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px system-ui,Arial,sans-serif;background:#1d2330;color:#1d2330}
+  form{background:#fff;padding:28px;border-radius:12px;width:min(360px,92vw)}
+  h1{margin:0 0 4px;font-size:20px}p{margin:0 0 16px;color:#667085;font-size:14px}
+  input{width:100%;padding:10px;border:1px solid #d0d5dd;border-radius:8px;font:inherit;margin-bottom:12px}
+  button{width:100%;padding:10px;border:0;border-radius:8px;background:#e8590c;color:#fff;font:inherit;font-weight:600;cursor:pointer}
+  .err{background:#ffe3e3;color:#a61e1e;padding:8px 10px;border-radius:8px;margin-bottom:12px;font-size:14px}
+</style></head>
+<body>
+  <form method="post">
+    <h1>Customania Outreach</h1><p>Acceso restringido</p>
+    {error && <div class="err">{error}</div>}
+    <input type="password" name="password" placeholder="Contraseña" autocomplete="current-password" autofocus required />
+    <button>Entrar</button>
+  </form>
+</body></html>

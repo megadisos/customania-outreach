@@ -1,0 +1,49 @@
+---
+export const prerender = false;
+import PanelLayout from '../layouts/PanelLayout.astro';
+import { db } from '../lib/panel/db';
+import { SEGMENTS } from '../lib/panel/config';
+import { PROFILES } from '../lib/panel/catalog';
+import { flash } from '../lib/panel/auth';
+
+const d = db();
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const v = (k: string) => String(f.get(k) || '');
+  const id = v('id');
+  if (id) d.prepare('UPDATE templates SET name=?,segment=?,step=?,subject=?,body=?,attach_catalog=? WHERE id=?')
+    .run(v('name'), v('segment'), Number(v('step')), v('subject'), v('body'), v('attach_catalog'), Number(id));
+  else d.prepare('INSERT INTO templates(name,segment,step,subject,body,attach_catalog) VALUES(?,?,?,?,?,?)')
+    .run(v('name'), v('segment'), Number(v('step')), v('subject'), v('body'), v('attach_catalog'));
+  flash(Astro.cookies, 'Plantilla guardada.');
+  return Astro.redirect('/plantillas');
+}
+const rows = d.prepare('SELECT * FROM templates ORDER BY step, id').all() as any[];
+const V = ['{{empresa}}', '{{nombre}}', '{{saludo}}', '{{asunto_original}}'];
+---
+<PanelLayout title="Plantillas">
+  <h1>Plantillas</h1>
+  <p class="mu">Variables: {V.join(', ')} (saludo = nombre o «equipo de Empresa»; asunto_original solo en seguimiento). El pie legal y el aviso de baja se agregan solos. Paso 1 = primer correo · Paso 2 = seguimiento único.</p>
+  {rows.map((t) => (
+    <div class="card"><form method="post">
+      <input type="hidden" name="id" value={t.id} />
+      <div class="row">
+        <input name="name" value={t.name} size="45" />
+        <select name="segment"><option value="todos" selected={t.segment === 'todos'}>todos</option>{Object.entries(SEGMENTS).map(([k, v]) => <option value={k} selected={k === t.segment}>{v}</option>)}</select>
+        <select name="step"><option value="1" selected={t.step === 1}>Paso 1</option><option value="2" selected={t.step === 2}>Paso 2</option></select>
+        <select name="attach_catalog"><option value="">Sin catálogo</option>{Object.entries(PROFILES).map(([k, v]) => <option value={k} selected={k === t.attach_catalog}>Adjuntar: {v.label}</option>)}</select>
+      </div>
+      <div class="row"><input name="subject" value={t.subject} style="width:100%" /></div>
+      <textarea name="body">{t.body}</textarea><p><button>Guardar</button></p>
+    </form></div>
+  ))}
+  <div class="card"><h2>Nueva plantilla</h2>
+    <form method="post">
+      <div class="row"><input name="name" placeholder="Nombre" required />
+        <select name="segment"><option value="todos">todos</option>{Object.entries(SEGMENTS).map(([k, v]) => <option value={k}>{v}</option>)}</select>
+        <select name="step"><option value="1">Paso 1</option><option value="2">Paso 2</option></select>
+        <select name="attach_catalog"><option value="">Sin catálogo</option>{Object.entries(PROFILES).map(([k, v]) => <option value={k}>Adjuntar: {v.label}</option>)}</select></div>
+      <div class="row"><input name="subject" placeholder="Asunto" style="width:100%" required /></div>
+      <textarea name="body" required></textarea><p><button>Crear</button></p>
+    </form></div>
+</PanelLayout>

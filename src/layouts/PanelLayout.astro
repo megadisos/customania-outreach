@@ -1,0 +1,53 @@
+---
+import { popFlash } from '../lib/panel/auth';
+interface Props { title?: string }
+const { title = 'Customania Outreach' } = Astro.props;
+const msg = popFlash(Astro.cookies);
+const path = Astro.url.pathname;
+const nav = [['/', 'Resumen'], ['/contactos', 'Contactos'], ['/plantillas', 'Plantillas'], ['/catalogos', 'Catálogos'],
+  ['/enviar', 'Enviar'], ['/historial', 'Historial'], ['/guia', 'Buenas prácticas']];
+---
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow,noarchive" />
+  <title>{title} · Customania</title>
+</head>
+<body>
+  <nav>
+    <b>Customania Outreach</b>
+    {nav.map(([href, label]) => <a href={href} class={path === href ? 'on' : ''}>{label}</a>)}
+    <form method="post" action="/logout" class="out"><button class="sec">Salir</button></form>
+  </nav>
+  <main>
+    {msg && <div class="flash">{msg}</div>}
+    <slot />
+  </main>
+</body>
+</html>
+<style is:global>
+  :root{--bg:#f6f7f9;--card:#fff;--tx:#1d2330;--mu:#667085;--br:#e3e6eb;--ac:#e8590c;--er:#c92a2a}
+  @media(prefers-color-scheme:dark){:root{--bg:#14171c;--card:#1d2129;--tx:#e8eaee;--mu:#9aa3b2;--br:#2c323d}}
+  *{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,Arial,sans-serif;background:var(--bg);color:var(--tx)}
+  nav{background:var(--card);border-bottom:1px solid var(--br);padding:10px 16px;display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+  nav b{color:var(--ac)}nav a{color:var(--tx);text-decoration:none;font-weight:500}nav a:hover,nav a.on{color:var(--ac)}nav .out{margin-left:auto}
+  main{max-width:1100px;margin:0 auto;padding:16px}
+  .card{background:var(--card);border:1px solid var(--br);border-radius:10px;padding:16px;margin-bottom:16px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .stat{font-size:26px;font-weight:700}.mu{color:var(--mu);font-size:13px}
+  table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--br);vertical-align:top}
+  .tw{overflow-x:auto}
+  input,select,textarea,button{font:inherit;padding:7px 10px;border:1px solid var(--br);border-radius:7px;background:var(--bg);color:var(--tx)}
+  textarea{width:100%;min-height:220px}button{background:var(--ac);color:#fff;border:0;cursor:pointer;font-weight:600}
+  button.sec{background:var(--bg);color:var(--tx);border:1px solid var(--br)}
+  a{color:var(--ac)}
+  .tag{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;background:var(--br)}
+  .sent,.contacted,.replied{background:#d3f9d8;color:#1b5e20}.failed,.bounced,.unsubscribed,.do_not_contact{background:#ffe3e3;color:#a61e1e}
+  .dry_run,.new{background:#e7f0ff;color:#1c4a99}
+  .flash{background:#fff3bf;color:#5c4400;padding:10px 14px;border-radius:8px;margin-bottom:12px}
+  form.inline{display:inline}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+  pre{white-space:pre-wrap;background:var(--bg);padding:12px;border-radius:8px;border:1px solid var(--br)}
+  h1{font-size:22px;margin:4px 0 14px}h2{font-size:17px;margin-top:0}
+</style>

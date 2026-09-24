@@ -1,0 +1,89 @@
+---
+export const prerender = false;
+import PanelLayout from '../../layouts/PanelLayout.astro';
+import { addContact, db, logEvent, parseCsv, suppress } from '../../lib/panel/db';
+import { SEGMENTS, STATUSES } from '../../lib/panel/config';
+import { flash } from '../../lib/panel/auth';
+
+const d = db();
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const act = String(f.get('action') || '');
+  if (act === 'add') {
+    const r = addContact(d, Object.fromEntries([...f.entries()].map(([k, v]) => [k, String(v)])));
+    flash(Astro.cookies, { ok: 'Contacto agregado.', duplicado: 'Ese correo ya existe.', invalido: 'Correo inválido.' }[r]);
+  } else if (act === 'import') {
+    const file = f.get('file') as File | null;
+    if (!file || !file.size) flash(Astro.cookies, 'Sube un CSV con columnas: email, company, contact_name, segment, source_url, notes.');
+    else {
+      const res = { ok: 0, duplicado: 0, invalido: 0 };
+      for (const r of parseCsv(await file.text())) res[addContact(d, r)]++;
+      flash(Astro.cookies, `Importados: ${res.ok} · duplicados: ${res.duplicado} · inválidos: ${res.invalido}`);
+    }
+  } else if (act === 'status') {
+    const id = Number(f.get('id')); const st = String(f.get('status'));
+    const ct: any = d.prepare('SELECT * FROM contacts WHERE id=?').get(id);
+    if (ct && STATUSES.includes(st)) {
+      d.prepare('UPDATE contacts SET status=? WHERE id=?').run(st, id);
+      if (['unsubscribed', 'bounced', 'do_not_contact'].includes(st)) suppress(d, ct.email, 'marcado manualmente: ' + st);
+      else if (st === 'new') d.prepare('DELETE FROM suppression WHERE email=?').run(ct.email);
+      logEvent(d, id, ct.email, 'status', st);
+    }
+  }
+  return Astro.redirect(Astro.url.pathname + Astro.url.search);
+}
+
+const q = Astro.url.searchParams.get('q')?.trim() || '';
+const st = Astro.url.searchParams.get('status') || '';
+const sg = Astro.url.searchParams.get('segment') || '';
+let sql = 'SELECT * FROM contacts WHERE 1=1'; const args: any[] = [];
+if (q) { sql += ' AND (email LIKE ? OR company LIKE ?)'; args.push(`%${q}%`, `%${q}%`); }
+if (st) { sql += ' AND status=?'; args.push(st); }
+if (sg) { sql += ' AND segment=?'; args.push(sg); }
+const rows = d.prepare(sql + ' ORDER BY id DESC').all(...args) as any[];
+---
+<PanelLayout title="Contactos">
+  <h1>Contactos <span class="mu">({rows.length})</span></h1>
+  <div class="card">
+    <form class="row" method="get">
+      <input name="q" placeholder="Buscar correo o empresa" value={q} />
+      <select name="status"><option value="">Todos los estados</option>{STATUSES.map((s) => <option selected={s === st}>{s}</option>)}</select>
+      <select name="segment"><option value="">Todos los segmentos</option>{Object.entries(SEGMENTS).map(([k, v]) => <option value={k} selected={k === sg}>{v}</option>)}</select>
+      <button>Filtrar</button>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Agregar contacto</h2>
+    <form method="post" class="row">
+      <input type="hidden" name="action" value="add" />
+      <input name="email" placeholder="correo@empresa.com" required /><input name="company" placeholder="Empresa" />
+      <input name="contact_name" placeholder="Nombre (opcional)" />
+      <select name="segment">{Object.entries(SEGMENTS).map(([k, v]) => <option value={k}>{v}</option>)}</select>
+      <input name="source_url" placeholder="De dónde lo sacaste (URL)" /><button>Agregar</button>
+    </form>
+    <form method="post" enctype="multipart/form-data" class="row">
+      <input type="hidden" name="action" value="import" />
+      <input type="file" name="file" accept=".csv" /><button class="sec">Importar CSV</button>
+      <span class="mu">Columnas: email, company, contact_name, segment (colegios/uniformes/regalos/eventos/aliados), source_url, notes</span>
+    </form>
+  </div>
+  <div class="card tw">
+    <table>
+      <tr><th>Correo</th><th>Empresa</th><th>Segmento</th><th>Estado</th><th>Fuente</th><th></th></tr>
+      {rows.length === 0 && <tr><td colspan="6" class="mu">Sin resultados.</td></tr>}
+      {rows.map((r) => (
+        <tr>
+          <td><a href={`/contactos/${r.id}`}>{r.email}</a></td><td>{r.company}</td><td>{SEGMENTS[r.segment] || r.segment}</td>
+          <td><span class={`tag ${r.status}`}>{r.status}</span></td>
+          <td class="mu">{r.source_url && <a href={r.source_url} target="_blank" rel="noopener noreferrer">fuente</a>}</td>
+          <td>
+            <form class="inline" method="post">
+              <input type="hidden" name="action" value="status" /><input type="hidden" name="id" value={r.id} />
+              <select name="status" onchange="this.form.submit()">{STATUSES.map((s) => <option selected={s === r.status}>{s}</option>)}</select>
+            </form>
+          </td>
+        </tr>
+      ))}
+    </table>
+  </div>
+</PanelLayout>

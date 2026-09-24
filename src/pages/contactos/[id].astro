@@ -1,0 +1,41 @@
+---
+export const prerender = false;
+import PanelLayout from '../../layouts/PanelLayout.astro';
+import { db } from '../../lib/panel/db';
+import { SEGMENTS } from '../../lib/panel/config';
+
+const d = db();
+const id = Number(Astro.params.id);
+const ct: any = d.prepare('SELECT * FROM contacts WHERE id=?').get(id);
+if (!ct) return new Response('No encontrado', { status: 404 });
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  d.prepare('UPDATE contacts SET notes=?, contact_name=?, company=?, segment=? WHERE id=?')
+    .run(String(f.get('notes') || ''), String(f.get('contact_name') || ''), String(f.get('company') || ''), String(f.get('segment') || 'colegios'), id);
+  return Astro.redirect(Astro.url.pathname);
+}
+const logs = d.prepare('SELECT * FROM send_log WHERE contact_id=? ORDER BY id DESC').all(id) as any[];
+const evs = d.prepare('SELECT * FROM events WHERE contact_id=? ORDER BY id DESC').all(id) as any[];
+---
+<PanelLayout title={ct.email}>
+  <h1>{ct.email} <span class={`tag ${ct.status}`}>{ct.status}</span></h1>
+  <div class="card">
+    <form method="post">
+      <div class="row">
+        <input name="company" value={ct.company} placeholder="Empresa" /><input name="contact_name" value={ct.contact_name} placeholder="Nombre" />
+        <select name="segment">{Object.entries(SEGMENTS).map(([k, v]) => <option value={k} selected={k === ct.segment}>{v}</option>)}</select>
+      </div>
+      <textarea name="notes" style="min-height:80px" placeholder="Notas">{ct.notes}</textarea>
+      <p><button>Guardar</button></p>
+      {ct.source_url && <div class="mu">Fuente del correo: <a href={ct.source_url} target="_blank" rel="noopener noreferrer">{ct.source_url}</a></div>}
+    </form>
+  </div>
+  <div class="card"><h2>Correos enviados a este contacto</h2>
+    <table><tr><th>Fecha</th><th>Paso</th><th>Plantilla</th><th>Cuenta</th><th>Estado</th></tr>
+      {logs.length === 0 && <tr><td colspan="5" class="mu">Ninguno todavía.</td></tr>}
+      {logs.map((r) => <tr><td>{r.sent_at}</td><td>{r.step}</td><td><a href={`/historial/${r.id}`}>{r.template_name}</a></td><td>{r.account}</td><td><span class={`tag ${r.status}`}>{r.status}</span></td></tr>)}
+    </table></div>
+  <div class="card"><h2>Eventos</h2>
+    <table>{evs.length === 0 && <tr><td class="mu">Sin eventos.</td></tr>}
+      {evs.map((e) => <tr><td>{e.at}</td><td>{e.type}</td><td class="mu">{e.detail}</td></tr>)}</table></div>
+</PanelLayout>

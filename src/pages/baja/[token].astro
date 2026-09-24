@@ -1,0 +1,27 @@
+---
+// Público: enlace de baja de los correos. POST = baja directa (List-Unsubscribe-Post de Gmail/Outlook);
+// GET muestra una confirmación para que los escáneres de enlaces no den de baja por accidente.
+export const prerender = false;
+import { db, logEvent, suppress } from '../../lib/panel/db';
+
+const d = db();
+const ct: any = d.prepare('SELECT * FROM contacts WHERE token=?').get(Astro.params.token);
+if (!ct) return new Response('Enlace no válido', { status: 404 });
+let done = false;
+if (Astro.request.method === 'POST') {
+  d.prepare("UPDATE contacts SET status='unsubscribed' WHERE id=?").run(ct.id);
+  suppress(d, ct.email, 'enlace de baja');
+  logEvent(d, ct.id, ct.email, 'unsubscribed', 'enlace');
+  done = true;
+}
+---
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Baja · Customania</title>
+<style>body{font:16px system-ui,Arial,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;background:#f6f7f9;color:#1d2330}
+.c{background:#fff;padding:28px;border-radius:12px;max-width:380px;text-align:center}button{padding:10px 18px;border:0;border-radius:8px;background:#e8590c;color:#fff;font:inherit;font-weight:600;cursor:pointer}</style></head>
+<body><div class="c">
+  {done
+    ? <p>Listo. No volverá a recibir correos de Customania.</p>
+    : <form method="post"><p>¿Confirma que no desea recibir más correos de Customania?</p><button>Sí, darme de baja</button></form>}
+</div></body></html>
